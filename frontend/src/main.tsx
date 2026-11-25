@@ -5,16 +5,15 @@ import { Layout } from './components/Layout'
 import { PageHeader } from './components/PageHeader'
 import './styles.css'
 
-function Placeholder({ title }: { title: string }) {
-  return <><PageHeader title={title} description="This workspace is ready for the connected module." /><div className="card empty">Select a module from the navigation to continue.</div></>
+function Placeholder() {
+  return <><PageHeader title="BlueMoon Apartment Management" description="Your operations workspace." /><div className="card empty">Select a module from the navigation to continue.</div></>
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout />} />
-        <Route path="*" element={<Layout />} />
+        <Route element={<Layout />}><Route path="*" element={<Placeholder />} /></Route>
       </Routes>
     </BrowserRouter>
   </StrictMode>,
