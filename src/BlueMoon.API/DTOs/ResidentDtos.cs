@@ -75,6 +75,7 @@ public sealed class ResidentResponseDto
     public string ApartmentCode { get; init; } = string.Empty;
     public string Building { get; init; } = string.Empty;
     public string FullName { get; init; } = string.Empty;
+    public string IdentityNumber { get; init; } = string.Empty;
     public DateTime? DateOfBirth { get; init; }
     public string Gender { get; init; } = string.Empty;
     public string PhoneNumber { get; init; } = string.Empty;

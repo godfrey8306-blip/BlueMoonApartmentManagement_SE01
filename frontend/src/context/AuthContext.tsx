@@ -15,6 +15,7 @@ import {
 import type { ReactNode } from 'react'
 import { TOKEN_KEY, USER_KEY } from '../lib/apiClient'
 import type { UserResponse } from '../types/auth'
+import { getMe } from '../lib/authService'
 
 function readStoredToken(): string | null {
   const raw = localStorage.getItem(TOKEN_KEY)
@@ -50,7 +51,12 @@ interface AuthContextValue {
   token: string | null
   isAuthenticated: boolean
   isAdmin: boolean
+  /** Ban quản trị hoặc Kế toán */
+  isStaff: boolean
+  isResident: boolean
   login: (token: string, user: UserResponse) => void
+  /** Cập nhật thông tin user (sau khi sửa hồ sơ / đổi mật khẩu) */
+  setUser: (user: UserResponse) => void
   logout: () => void
 }
 
@@ -87,6 +93,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser)
   }, [])
 
+  const updateStoredUser = useCallback((next: UserResponse) => {
+    localStorage.setItem(USER_KEY, JSON.stringify(next))
+    setUser(next)
+  }, [])
+
+  // Đồng bộ lại thông tin tài khoản từ server khi mở app (role / hộ có thể đã đổi)
+  useEffect(() => {
+    if (!token) return
+    getMe()
+      .then((me) => updateStoredUser(me))
+      .catch(() => undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
@@ -100,10 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       isAuthenticated: Boolean(token && user),
       isAdmin: user?.role === 'Admin',
+      isStaff: user?.role === 'Admin' || user?.role === 'User',
+      isResident: user?.role === 'Resident',
       login,
+      setUser: updateStoredUser,
       logout,
     }),
-    [user, token, login, logout],
+    [user, token, login, logout, updateStoredUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

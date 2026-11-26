@@ -650,3 +650,22 @@ frontend/
 | `FeeChargesController` | `/api/fee-charges` | Admin | `GET /`, `GET /{id}`, `GET /apartment/{id}`, `GET /collection/{id}`, `GET /debt-summary`, `POST /`, `PUT /{id}`, `DELETE /{id}` |
 | `PaymentsController` | `/api/payments` | Admin | `GET /`, `GET /{id}`, `GET /apartment/{id}`, `GET /fee-charge/{id}`, `POST /` |
 | `SearchStatisticsController` | `/api/search-statistics` | Admin | `GET /households`, `GET /charges`, `GET /payments`, `GET /statistics/collections`, `GET /statistics/financial`, `GET /statistics/apartments` |
+
+---
+
+## Phần 4 — Trạng thái xử lý các cảnh báo ở Phần 3 (cập nhật 26/11/2026)
+
+| # | Vấn đề | Trạng thái |
+|---|---|---|
+| 1 | Tên role | ✅ Đã có 3 role: `Admin` (Ban quản trị), `User` (Kế toán), `Resident` (Cư dân). Ma trận quyền ở `03_USER_STORY_TRACEABILITY.md`. |
+| 2 | Thiếu Tạm trú / Tạm vắng | ✅ Backend có `TemporaryResidence`, `TemporaryAbsence`; tình trạng cư trú tự cập nhật. |
+| 3 | Thiếu endpoint đổi mật khẩu / hồ sơ cá nhân | ✅ Thêm `GET/PUT /api/auth/me`, `POST /api/auth/change-password` (bắt buộc mật khẩu hiện tại) cho mọi vai trò. |
+| 4 | Thiếu thông báo thu phí | ✅ Thêm giấy báo phí và nhắc nợ (`FeeNotice`), thông báo trong ứng dụng (`Notification`) và cổng cư dân. |
+| 5 | Cổng backend | ✅ `.env` / `.env.example` dùng `/api` qua Vite proxy tới `http://localhost:5016`. |
+| 6 | CORS | ⚪ Không cần khi chạy qua Vite proxy. Nếu deploy tách domain, cần bổ sung `AddCors`. |
+| 7 | Thiếu `[Authorize]` ở 4 controller | ✅ Đã gắn: đọc cho nhân viên, ghi chỉ Admin (khoản thu: cả Kế toán). |
+| 8 | Kế toán không dùng được chức năng nào | ✅ Kế toán dùng được toàn bộ thu phí, công nợ, thanh toán, thống kê. |
+| 9 | Không có mã khoản thu | ⚪ Giữ nguyên: kiểm tra trùng theo tên (không phân biệt hoa thường). |
+| 10 | Báo cáo cư dân | ✅ Lọc nâng cao và xuất CSV toàn bộ kết quả. |
+| 12 | Danh sách nhân khẩu không trả CCCD | ✅ `ResidentResponseDto` đã có `IdentityNumber`. |
+| — | Lỗi validation `Range` decimal trên máy locale vi-VN | ✅ Thêm `ParseLimitsInInvariantCulture = true`. |

@@ -33,7 +33,7 @@ public sealed class PaymentDetailCreateDto
     [Range(1, int.MaxValue)]
     public int FeeChargeId { get; set; }
 
-    [Range(typeof(decimal), "0.01", "1000000000000")]
+    [Range(typeof(decimal), "0.01", "1000000000000", ParseLimitsInInvariantCulture = true)]
     public decimal Amount { get; set; }
 }
 
@@ -45,6 +45,7 @@ public sealed class PaymentResponseDto
     public int? ResidentId { get; init; }
     public string ResidentFullName { get; init; } = string.Empty;
     public int ReceivedByUserId { get; init; }
+    public string ReceivedByUsername { get; init; } = string.Empty;
     public string ReceiptNumber { get; init; } = string.Empty;
     public DateTime PaymentDate { get; init; }
     public decimal TotalAmount { get; init; }
@@ -61,4 +62,8 @@ public sealed class PaymentDetailResponseDto
     public int FeeCollectionId { get; init; }
     public string FeeCollectionName { get; init; } = string.Empty;
     public decimal Amount { get; init; }
+    public DateTime? DueDate { get; init; }
+
+    /// <summary>Nộp sau hạn (so theo ngày VN).</summary>
+    public bool IsLate { get; init; }
 }

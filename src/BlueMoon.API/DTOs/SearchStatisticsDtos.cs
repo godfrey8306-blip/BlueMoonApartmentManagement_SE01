@@ -1,3 +1,4 @@
+using BlueMoon.API.Infrastructure;
 namespace BlueMoon.API.DTOs;
 
 public sealed class HouseholdSearchResponseDto
@@ -39,6 +40,8 @@ public sealed class FinancialSearchResponseDto
     public decimal OutstandingAmount { get; init; }
     public string Status { get; init; } = string.Empty;
     public DateTime? DueDate { get; init; }
+    public bool IsOverdue => VnClock.IsOverdue(DueDate, OutstandingAmount);
+    public int DaysOverdue => VnClock.DaysOverdue(DueDate, OutstandingAmount);
 }
 
 public sealed class PaymentSearchResponseDto
@@ -68,6 +71,8 @@ public sealed class CollectionStatisticsDto
     public decimal PaidAmount { get; init; }
     public decimal OutstandingAmount { get; init; }
     public decimal CollectionRate { get; init; }
+    public DateTime DueDate { get; init; }
+    public decimal OverdueAmount { get; init; }
 }
 
 public sealed class FinancialStatisticsDto
@@ -81,6 +86,10 @@ public sealed class FinancialStatisticsDto
     public int UnpaidChargeCount { get; init; }
     public int PartiallyPaidChargeCount { get; init; }
     public int PaidChargeCount { get; init; }
+    public int OverdueChargeCount { get; init; }
+    public decimal OverdueAmount { get; init; }
+    public int OverdueApartmentCount { get; init; }
+    public int DueSoonChargeCount { get; init; }
 }
 
 public sealed class ApartmentContributionStatisticsDto

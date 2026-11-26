@@ -1,4 +1,4 @@
-﻿namespace BlueMoon.API.Models;
+namespace BlueMoon.API.Models;
 
 public class Resident
 {
@@ -12,6 +12,9 @@ public class Resident
     public string Relationship { get; set; } = string.Empty;
     public bool IsHouseholdHead { get; set; }
     public string Status { get; set; } = "Active";
+
+    /// <summary>Họ tên đã bỏ dấu, chữ thường — dùng cho tìm kiếm (tự cập nhật khi SaveChanges).</summary>
+    public string SearchName { get; set; } = string.Empty;
 
     public Household? Household { get; set; }
     public ICollection<ResidenceHistory> ResidenceHistories { get; set; } = new List<ResidenceHistory>();

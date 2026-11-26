@@ -1,226 +1,152 @@
 /**
- * ProfilePage.tsx
- * Trang Hồ sơ cá nhân — Route: /profile
- * - Xem thông tin user đang đăng nhập.
- * - Cập nhật fullName, email (không cho sửa role).
- * - Đổi mật khẩu (điền newPassword).
- *
- * ⚠ LƯU Ý: Backend dùng PUT /api/users/{id} với [Authorize(Roles="Admin")].
- * Role "User" (Kế toán) KHÔNG có quyền tự cập nhật thông tin.
- * Màn hình hiển thị cảnh báo tương ứng và ẩn form sửa đổi với role User.
+ * ProfilePage.tsx — /profile (nhân viên) và /portal/profile (cư dân) · PBI-023, PBI-024 / US-015
+ *  - Mọi vai trò tự cập nhật họ tên, email (PUT /api/auth/me).
+ *  - Đổi mật khẩu bắt buộc nhập mật khẩu hiện tại (POST /api/auth/change-password).
  */
 import { useState, type FormEvent } from 'react'
 import { PageHeader } from '../components/PageHeader'
 import { Feedback } from '../components/Feedback'
 import { useAuth } from '../context/AuthContext'
-import { updateUser } from '../lib/authService'
+import { useUI } from '../context/UIContext'
+import { changePassword, updateMe } from '../lib/authService'
+import { errorMessage } from '../lib/errors'
+import { ROLE_LABELS } from '../lib/format'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export function passwordProblems(pw: string): string[] {
+  const issues: string[] = []
+  if (pw.length < 8) issues.push('ít nhất 8 ký tự')
+  if (!/[A-Za-z]/.test(pw)) issues.push('có chữ cái')
+  if (!/\d/.test(pw)) issues.push('có chữ số')
+  return issues
+}
+
+export function ChangePasswordForm({ onDone }: { onDone?: () => void }) {
+  const { setUser } = useAuth()
+  const { toast } = useUI()
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [error, setError] = useState<string>()
+  const [saving, setSaving] = useState(false)
+  const problems = next ? passwordProblems(next) : []
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setError(undefined)
+    if (!current) return setError('Vui lòng nhập mật khẩu hiện tại.')
+    if (problems.length) return setError(`Mật khẩu mới cần ${problems.join(', ')}.`)
+    if (next === current) return setError('Mật khẩu mới phải khác mật khẩu hiện tại.')
+    if (next !== confirmPw) return setError('Xác nhận mật khẩu không khớp.')
+    setSaving(true)
+    try {
+      const user = await changePassword({ currentPassword: current, newPassword: next })
+      setUser(user)
+      toast.success('Đổi mật khẩu thành công.')
+      setCurrent('')
+      setNext('')
+      setConfirmPw('')
+      onDone?.()
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate>
+      <Feedback error={error} />
+      <div className="field mb-16">
+        <label htmlFor="pw-current">Mật khẩu hiện tại *</label>
+        <input id="pw-current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+      </div>
+      <div className="field mb-16">
+        <label htmlFor="pw-new">Mật khẩu mới *</label>
+        <input id="pw-new" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+        <span className={`hint ${next && problems.length ? 'text-danger' : next ? 'text-success' : ''}`}>
+          {next ? (problems.length ? `Cần ${problems.join(', ')}` : '✓ Mật khẩu hợp lệ') : 'Tối thiểu 8 ký tự, gồm cả chữ và số.'}
+        </span>
+      </div>
+      <div className="field mb-20">
+        <label htmlFor="pw-confirm">Nhập lại mật khẩu mới *</label>
+        <input id="pw-confirm" type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
+        {confirmPw && confirmPw !== next && <span className="hint text-danger">Chưa khớp với mật khẩu mới.</span>}
+      </div>
+      <button type="submit" className="btn btn-primary" disabled={saving}>
+        {saving ? 'Đang lưu…' : 'Đổi mật khẩu'}
+      </button>
+    </form>
+  )
+}
 
 export function ProfilePage() {
-  const { user, isAdmin, login, token } = useAuth()
-
+  const { user, setUser } = useAuth()
+  const { toast } = useUI()
   const [fullName, setFullName] = useState(user?.fullName ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | undefined>()
-  const [success, setSuccess] = useState<string | undefined>()
+  const [error, setError] = useState<string>()
+  const [saving, setSaving] = useState(false)
 
   if (!user) return null
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function saveProfile(e: FormEvent) {
     e.preventDefault()
     setError(undefined)
-    setSuccess(undefined)
-
-    // Validate
-    if (!fullName.trim()) {
-      setError('Vui lòng nhập họ tên.')
-      return
-    }
-    if (!email.trim()) {
-      setError('Vui lòng nhập email.')
-      return
-    }
-    if (newPassword && newPassword.length < 8) {
-      setError('Mật khẩu mới phải có ít nhất 8 ký tự.')
-      return
-    }
-    if (newPassword && newPassword !== confirmPassword) {
-      setError('Xác nhận mật khẩu không khớp.')
-      return
-    }
-
-    setLoading(true)
+    if (!fullName.trim()) return setError('Vui lòng nhập họ tên.')
+    if (!EMAIL_RE.test(email.trim())) return setError('Email không hợp lệ.')
+    setSaving(true)
     try {
-      const updatedUser = await updateUser(user!.id, {
-        fullName: fullName.trim(),
-        email: email.trim(),
-        role: user!.role,
-        ...(newPassword ? { newPassword } : {}),
-      })
-
-      // Cập nhật thông tin trong AuthContext & localStorage
-      if (token) {
-        login(token, updatedUser)
-      }
-
-      setSuccess('Cập nhật thông tin thành công.')
-      setNewPassword('')
-      setConfirmPassword('')
+      const updated = await updateMe({ fullName: fullName.trim(), email: email.trim() })
+      setUser(updated)
+      toast.success('Đã cập nhật thông tin cá nhân.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Cập nhật thất bại.')
+      setError(errorMessage(err))
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
   return (
     <>
-      <PageHeader
-        title="Hồ sơ cá nhân"
-        description="Xem và cập nhật thông tin tài khoản của bạn."
-      />
-
-      <div style={{ maxWidth: 560 }}>
-        {/* Thông tin chỉ-đọc */}
-        <div className="card" style={{ marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: '#52657d' }}>
-            THÔNG TIN TÀI KHOẢN
-          </h3>
-          <div className="grid grid-2" style={{ gap: 12 }}>
-            <div>
-              <div style={{ fontSize: '.8rem', color: '#718096', marginBottom: 4 }}>Tên đăng nhập</div>
-              <div style={{ fontWeight: 600 }}>{user.username}</div>
+      <PageHeader title="Hồ sơ cá nhân" description="Xem, cập nhật thông tin tài khoản và đổi mật khẩu." />
+      <div className="grid grid-2" style={{ alignItems: 'start' }}>
+        <div className="card">
+          <h3 className="section-title">Thông tin tài khoản</h3>
+          <dl className="detail-list mb-16">
+            <dt>Tên đăng nhập</dt>
+            <dd>{user.username}</dd>
+            <dt>Vai trò</dt>
+            <dd>{ROLE_LABELS[user.role]}</dd>
+            {user.householdCode && (
+              <>
+                <dt>Hộ gia đình</dt>
+                <dd>
+                  {user.householdCode} · căn {user.apartmentCode}
+                </dd>
+              </>
+            )}
+          </dl>
+          <Feedback error={error} />
+          <form onSubmit={saveProfile} noValidate>
+            <div className="field mb-16">
+              <label htmlFor="p-name">Họ và tên *</label>
+              <input id="p-name" maxLength={200} value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </div>
-            <div>
-              <div style={{ fontSize: '.8rem', color: '#718096', marginBottom: 4 }}>Vai trò</div>
-              <div style={{ fontWeight: 600 }}>
-                {user.role === 'Admin' ? '🏢 Ban quản trị (Admin)' : '📊 Kế toán (User)'}
-              </div>
+            <div className="field mb-20">
+              <label htmlFor="p-email">Email *</label>
+              <input id="p-email" type="email" maxLength={320} value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
-            <div>
-              <div style={{ fontSize: '.8rem', color: '#718096', marginBottom: 4 }}>Trạng thái</div>
-              <div>
-                <span className={`badge ${user.isActive ? 'badge-success' : 'badge-muted'}`}>
-                  {user.isActive ? 'Đang hoạt động' : 'Đã khóa'}
-                </span>
-              </div>
-            </div>
-          </div>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Đang lưu…' : 'Lưu thông tin'}
+            </button>
+          </form>
         </div>
-
-        {/* Cảnh báo cho role User */}
-        {!isAdmin && (
-          <div
-            className="alert"
-            style={{
-              background: '#fef3c7',
-              color: '#92400e',
-              marginBottom: 20,
-              borderRadius: 9,
-              padding: '12px 14px',
-            }}
-            role="note"
-          >
-            ⚠️ Tài khoản <strong>Kế toán (User)</strong> hiện không có quyền tự cập nhật thông tin.
-            Vui lòng liên hệ <strong>Ban quản trị</strong> để thay đổi.
-          </div>
-        )}
-
-        {/* Form chỉ hiển thị cho Admin */}
-        {isAdmin && (
-          <div className="card">
-            <h3 style={{ margin: '0 0 16px', fontSize: '1rem', color: '#52657d' }}>
-              CẬP NHẬT THÔNG TIN
-            </h3>
-
-            <Feedback error={error} success={success} />
-
-            <form onSubmit={handleSubmit} noValidate>
-              <div className="field" style={{ marginBottom: 16 }}>
-                <label htmlFor="fullName">Họ và tên</label>
-                <input
-                  id="fullName"
-                  type="text"
-                  maxLength={200}
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={loading}
-                  required
-                />
-              </div>
-
-              <div className="field" style={{ marginBottom: 24 }}>
-                <label htmlFor="email">Email</label>
-                <input
-                  id="email"
-                  type="email"
-                  maxLength={200}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                  required
-                />
-              </div>
-
-              <hr style={{ border: 'none', borderTop: '1px solid #e6ebf2', margin: '0 0 20px' }} />
-              <p style={{ margin: '0 0 16px', fontSize: '.85rem', color: '#718096' }}>
-                Để đổi mật khẩu, điền vào hai trường bên dưới. Bỏ trống nếu không muốn thay đổi.
-              </p>
-
-              <div className="field" style={{ marginBottom: 16 }}>
-                <label htmlFor="newPassword">Mật khẩu mới</label>
-                <input
-                  id="newPassword"
-                  type="password"
-                  maxLength={200}
-                  placeholder="Tối thiểu 8 ký tự"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  disabled={loading}
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div className="field" style={{ marginBottom: 24 }}>
-                <label htmlFor="confirmPassword">Xác nhận mật khẩu mới</label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  maxLength={200}
-                  placeholder="Nhập lại mật khẩu mới"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={loading}
-                  autoComplete="new-password"
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? 'Đang lưu…' : 'Lưu thay đổi'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setFullName(user.fullName)
-                    setEmail(user.email)
-                    setNewPassword('')
-                    setConfirmPassword('')
-                    setError(undefined)
-                    setSuccess(undefined)
-                  }}
-                  disabled={loading}
-                >
-                  Hủy
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+        <div className="card">
+          <h3 className="section-title">Đổi mật khẩu</h3>
+          <ChangePasswordForm />
+        </div>
       </div>
     </>
   )

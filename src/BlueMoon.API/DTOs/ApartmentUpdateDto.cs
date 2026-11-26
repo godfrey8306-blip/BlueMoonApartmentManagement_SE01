@@ -1,13 +1,15 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace BlueMoon.API.DTOs;
 
 public class ApartmentUpdateDto
 {
     [Required]
+    [StringLength(50, MinimumLength = 1)]
     public string ApartmentCode { get; set; } = string.Empty;
 
     [Required]
+    [StringLength(50, MinimumLength = 1)]
     public string Building { get; set; } = string.Empty;
 
     [Range(1, 100)]

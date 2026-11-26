@@ -12,8 +12,11 @@ import { useAuth } from '../context/AuthContext'
 import { login as loginApi } from '../lib/authService'
 import { Feedback } from '../components/Feedback'
 
+/** Các route chỉ dành cho Admin (khớp với main.tsx). */
+const ADMIN_ONLY_PREFIXES = ['/resident-histories', '/users']
+
 export function LoginPage() {
-  const { isAuthenticated, login } = useAuth()
+  const { isAuthenticated, user, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -25,7 +28,17 @@ export function LoginPage() {
   // Nếu đã đăng nhập, chuyển về trang trước hoặc trang chủ
   const rawFrom = (location.state as { from?: { pathname?: string } })?.from?.pathname
   const from = rawFrom && rawFrom !== '/login' ? rawFrom : '/'
-  if (isAuthenticated) return <Navigate to={from} replace />
+
+  /** Trang trước có thể là của người dùng phiên trước (Admin) → User không vào được thì về Dashboard. */
+  function targetFor(role: string) {
+    // Cư dân luôn vào cổng cư dân; nhân viên không vào được /portal
+    if (role === 'Resident') return from.startsWith('/portal') ? from : '/portal'
+    if (from.startsWith('/portal')) return '/'
+    const adminOnly = ADMIN_ONLY_PREFIXES.some((p) => from === p || from.startsWith(`${p}/`))
+    return adminOnly && role !== 'Admin' ? '/' : from
+  }
+
+  if (isAuthenticated && user) return <Navigate to={targetFor(user.role)} replace />
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -53,7 +66,7 @@ export function LoginPage() {
         return
       }
       login(res.accessToken, res.user)
-      navigate(from, { replace: true })
+      navigate(targetFor(res.user.role), { replace: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra.'
       // Map thông báo lỗi tiếng Anh của server sang tiếng Việt
