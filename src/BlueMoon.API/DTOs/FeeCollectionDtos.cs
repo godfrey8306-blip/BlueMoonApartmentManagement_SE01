@@ -13,6 +13,9 @@ public sealed class FeeCollectionCreateDto
 
     [Range(2000, 2100)]
     public int Year { get; set; }
+
+    /// <summary>Hạn nộp. Bỏ trống → ngày cuối của tháng thu.</summary>
+    public DateTime? DueDate { get; set; }
 }
 
 public sealed class FeeCollectionUpdateDto
@@ -31,6 +34,9 @@ public sealed class FeeCollectionUpdateDto
     [RegularExpression("^(Open|Closed|Cancelled)$",
         ErrorMessage = "Status must be Open, Closed, or Cancelled.")]
     public string Status { get; set; } = "Open";
+
+    /// <summary>Đổi hạn nộp; các khoản phải thu đang dùng hạn cũ của đợt sẽ được cập nhật theo.</summary>
+    public DateTime? DueDate { get; set; }
 }
 
 public sealed class FeeCollectionStatusDto
@@ -51,4 +57,7 @@ public sealed class FeeCollectionResponseDto
     public int CreatedByUserId { get; init; }
     public string CreatedByUsername { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
+    public DateTime DueDate { get; init; }
+    public int ChargeCount { get; init; }
+    public int NoticeCount { get; init; }
 }

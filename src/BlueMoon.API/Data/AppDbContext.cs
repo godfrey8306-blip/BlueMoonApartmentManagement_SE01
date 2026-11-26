@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using BlueMoon.API.Infrastructure;
 using BlueMoon.API.Models;
 
 namespace BlueMoon.API.Data;
@@ -21,10 +22,37 @@ public class AppDbContext : DbContext
     public DbSet<FeeCharge> FeeCharges { get; set; }
     public DbSet<Payment> Payments { get; set; }
     public DbSet<PaymentDetail> PaymentDetails { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
+    public DbSet<FeeNotice> FeeNotices { get; set; }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        UpdateSearchColumns();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        UpdateSearchColumns();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>Tự tính cột tìm kiếm không dấu cho cư dân mỗi khi thêm/sửa.</summary>
+    private void UpdateSearchColumns()
+    {
+        foreach (var entry in ChangeTracker.Entries<Resident>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+                entry.Entity.SearchName = TextNormalizer.Normalize(entry.Entity.FullName);
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Tìm kiếm chuỗi con nhanh (ILIKE '%term%') cần index trigram
+        modelBuilder.HasPostgresExtension("pg_trgm");
 
         // USER
         modelBuilder.Entity<User>()
@@ -39,10 +67,20 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Apartment>()
             .Property(a => a.Area).HasPrecision(10, 2);
+        modelBuilder.Entity<Apartment>()
+            .HasIndex(a => a.Building);
+        modelBuilder.Entity<Apartment>()
+            .HasIndex(a => a.ApartmentCode, "IX_Apartments_ApartmentCode_trgm")
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
 
         // HOUSEHOLD
         modelBuilder.Entity<Household>()
             .HasIndex(h => h.HouseholdCode).IsUnique();
+        modelBuilder.Entity<Household>()
+            .HasIndex(h => h.HouseholdCode, "IX_Households_HouseholdCode_trgm")
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
 
         modelBuilder.Entity<Household>()
             .HasOne(h => h.Apartment)
@@ -51,6 +89,22 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         // RESIDENT
+        modelBuilder.Entity<Resident>()
+            .HasIndex(r => r.IdentityNumber).IsUnique();
+        modelBuilder.Entity<Resident>()
+            .HasIndex(r => r.Status);
+        modelBuilder.Entity<Resident>()
+            .HasIndex(r => r.SearchName, "IX_Residents_SearchName_trgm")
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
+        modelBuilder.Entity<Resident>()
+            .HasIndex(r => r.IdentityNumber, "IX_Residents_IdentityNumber_trgm")
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
+        modelBuilder.Entity<Resident>()
+            .HasIndex(r => r.PhoneNumber, "IX_Residents_PhoneNumber_trgm")
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
         modelBuilder.Entity<Resident>()
             .HasOne(r => r.Household)
             .WithMany(h => h.Residents)
@@ -95,6 +149,12 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         // FEE CHARGE
+        modelBuilder.Entity<FeeCharge>()
+            .HasIndex(f => new { f.FeeCollectionId, f.ApartmentId, f.FeeCategoryId }).IsUnique();
+        modelBuilder.Entity<FeeCharge>()
+            .HasIndex(f => f.DueDate);
+        modelBuilder.Entity<FeeCharge>()
+            .HasIndex(f => f.Status);
         modelBuilder.Entity<FeeCharge>()
             .HasOne(f => f.FeeCollection)
             .WithMany(c => c.FeeCharges)
@@ -146,6 +206,12 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Payment>()
             .HasIndex(p => p.ReceiptNumber).IsUnique();
+        modelBuilder.Entity<Payment>()
+            .HasIndex(p => p.ReceiptNumber, "IX_Payments_ReceiptNumber_trgm")
+            .HasMethod("gin")
+            .HasOperators("gin_trgm_ops");
+        modelBuilder.Entity<Payment>()
+            .HasIndex(p => p.PaymentDate);
 
         modelBuilder.Entity<Payment>()
             .Property(p => p.TotalAmount).HasPrecision(18, 2);
@@ -165,5 +231,48 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<PaymentDetail>()
             .Property(d => d.Amount).HasPrecision(18, 2);
+
+        // USER ↔ HOUSEHOLD (tài khoản cư dân)
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.Household)
+            .WithMany()
+            .HasForeignKey(u => u.HouseholdId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // NOTIFICATION
+        modelBuilder.Entity<Notification>()
+            .HasOne(n => n.Recipient)
+            .WithMany()
+            .HasForeignKey(n => n.RecipientUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<Notification>()
+            .HasIndex(n => new { n.RecipientUserId, n.ReadAt, n.CreatedAt });
+        modelBuilder.Entity<Notification>()
+            .Property(n => n.Title).HasMaxLength(200);
+        modelBuilder.Entity<Notification>()
+            .Property(n => n.Message).HasMaxLength(2000);
+
+        // FEE NOTICE
+        modelBuilder.Entity<FeeNotice>()
+            .HasOne(n => n.FeeCollection)
+            .WithMany()
+            .HasForeignKey(n => n.FeeCollectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<FeeNotice>()
+            .HasOne(n => n.Apartment)
+            .WithMany()
+            .HasForeignKey(n => n.ApartmentId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<FeeNotice>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(n => n.IssuedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<FeeNotice>()
+            .HasIndex(n => new { n.FeeCollectionId, n.ApartmentId, n.Type });
+        modelBuilder.Entity<FeeNotice>()
+            .Property(n => n.TotalAmount).HasPrecision(18, 2);
+        modelBuilder.Entity<FeeNotice>()
+            .Property(n => n.OutstandingAmount).HasPrecision(18, 2);
     }
 }

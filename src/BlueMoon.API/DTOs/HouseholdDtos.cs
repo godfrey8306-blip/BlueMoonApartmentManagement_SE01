@@ -33,4 +33,10 @@ public sealed class HouseholdResponseDto
     public string Building { get; init; } = string.Empty;
     public DateTime CreatedAt { get; init; }
     public bool IsActive { get; init; }
+    public int? HeadResidentId { get; init; }
+    public string? HeadOfHousehold { get; init; }
+    public string? HeadPhoneNumber { get; init; }
+    public int ResidentCount { get; init; }
+    public int? AccountUserId { get; init; }
+    public string? AccountUsername { get; init; }
 }

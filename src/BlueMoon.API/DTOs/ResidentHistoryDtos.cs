@@ -8,8 +8,8 @@ public sealed class ResidentHistoryCreateDto : IValidatableObject
     public int ResidentId { get; set; }
 
     [Required]
-    [RegularExpression("^(MoveIn|MoveOut|InformationChange)$",
-        ErrorMessage = "HistoryType must be MoveIn, MoveOut, or InformationChange.")]
+    [RegularExpression("^(MoveIn|MoveOut|TemporaryResidence|TemporaryAbsence|InformationChange)$",
+        ErrorMessage = "HistoryType must be MoveIn, MoveOut, TemporaryResidence, TemporaryAbsence, or InformationChange.")]
     public string HistoryType { get; set; } = string.Empty;
 
     public DateTime StartDate { get; set; }

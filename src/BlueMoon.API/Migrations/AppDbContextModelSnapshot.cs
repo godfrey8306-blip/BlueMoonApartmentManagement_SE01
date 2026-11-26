@@ -20,6 +20,7 @@ namespace BlueMoon.API.Migrations
                 .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("BlueMoon.API.Models.Apartment", b =>
@@ -53,6 +54,13 @@ namespace BlueMoon.API.Migrations
 
                     b.HasIndex("ApartmentCode")
                         .IsUnique();
+
+                    b.HasIndex("Building");
+
+                    b.HasIndex(new[] { "ApartmentCode" }, "IX_Apartments_ApartmentCode_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "ApartmentCode" }, "IX_Apartments_ApartmentCode_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "ApartmentCode" }, "IX_Apartments_ApartmentCode_trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("Apartments");
                 });
@@ -139,9 +147,14 @@ namespace BlueMoon.API.Migrations
 
                     b.HasIndex("ApartmentId");
 
+                    b.HasIndex("DueDate");
+
                     b.HasIndex("FeeCategoryId");
 
-                    b.HasIndex("FeeCollectionId");
+                    b.HasIndex("Status");
+
+                    b.HasIndex("FeeCollectionId", "ApartmentId", "FeeCategoryId")
+                        .IsUnique();
 
                     b.ToTable("FeeCharges");
                 });
@@ -159,6 +172,9 @@ namespace BlueMoon.API.Migrations
 
                     b.Property<int>("CreatedByUserId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Month")
                         .HasColumnType("integer");
@@ -179,6 +195,55 @@ namespace BlueMoon.API.Migrations
                     b.HasIndex("CreatedByUserId");
 
                     b.ToTable("FeeCollections");
+                });
+
+            modelBuilder.Entity("BlueMoon.API.Models.FeeNotice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApartmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FeeCollectionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("IssuedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Message")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("OutstandingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApartmentId");
+
+                    b.HasIndex("IssuedByUserId");
+
+                    b.HasIndex("FeeCollectionId", "ApartmentId", "Type");
+
+                    b.ToTable("FeeNotices");
                 });
 
             modelBuilder.Entity("BlueMoon.API.Models.Household", b =>
@@ -209,7 +274,60 @@ namespace BlueMoon.API.Migrations
                     b.HasIndex("HouseholdCode")
                         .IsUnique();
 
+                    b.HasIndex(new[] { "HouseholdCode" }, "IX_Households_HouseholdCode_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "HouseholdCode" }, "IX_Households_HouseholdCode_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "HouseholdCode" }, "IX_Households_HouseholdCode_trgm"), new[] { "gin_trgm_ops" });
+
                     b.ToTable("Households");
+                });
+
+            modelBuilder.Entity("BlueMoon.API.Models.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Link")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RecipientUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecipientUserId", "ReadAt", "CreatedAt");
+
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("BlueMoon.API.Models.Payment", b =>
@@ -251,12 +369,19 @@ namespace BlueMoon.API.Migrations
 
                     b.HasIndex("ApartmentId");
 
+                    b.HasIndex("PaymentDate");
+
                     b.HasIndex("ReceiptNumber")
                         .IsUnique();
 
                     b.HasIndex("ReceivedByUserId");
 
                     b.HasIndex("ResidentId");
+
+                    b.HasIndex(new[] { "ReceiptNumber" }, "IX_Payments_ReceiptNumber_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "ReceiptNumber" }, "IX_Payments_ReceiptNumber_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "ReceiptNumber" }, "IX_Payments_ReceiptNumber_trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("Payments");
                 });
@@ -370,6 +495,10 @@ namespace BlueMoon.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SearchName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -377,6 +506,26 @@ namespace BlueMoon.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("HouseholdId");
+
+                    b.HasIndex("IdentityNumber")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex(new[] { "IdentityNumber" }, "IX_Residents_IdentityNumber_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "IdentityNumber" }, "IX_Residents_IdentityNumber_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "IdentityNumber" }, "IX_Residents_IdentityNumber_trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "PhoneNumber" }, "IX_Residents_PhoneNumber_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "PhoneNumber" }, "IX_Residents_PhoneNumber_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "PhoneNumber" }, "IX_Residents_PhoneNumber_trgm"), new[] { "gin_trgm_ops" });
+
+                    b.HasIndex(new[] { "SearchName" }, "IX_Residents_SearchName_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "SearchName" }, "IX_Residents_SearchName_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "SearchName" }, "IX_Residents_SearchName_trgm"), new[] { "gin_trgm_ops" });
 
                     b.ToTable("Residents");
                 });
@@ -389,6 +538,9 @@ namespace BlueMoon.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
@@ -397,7 +549,13 @@ namespace BlueMoon.API.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("HouseholdId")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("MustChangePassword")
                         .HasColumnType("boolean");
 
                     b.Property<string>("PasswordHash")
@@ -416,6 +574,8 @@ namespace BlueMoon.API.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("HouseholdId");
 
                     b.HasIndex("Username")
                         .IsUnique();
@@ -493,6 +653,31 @@ namespace BlueMoon.API.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("BlueMoon.API.Models.FeeNotice", b =>
+                {
+                    b.HasOne("BlueMoon.API.Models.Apartment", "Apartment")
+                        .WithMany()
+                        .HasForeignKey("ApartmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BlueMoon.API.Models.FeeCollection", "FeeCollection")
+                        .WithMany()
+                        .HasForeignKey("FeeCollectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BlueMoon.API.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("IssuedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Apartment");
+
+                    b.Navigation("FeeCollection");
+                });
+
             modelBuilder.Entity("BlueMoon.API.Models.Household", b =>
                 {
                     b.HasOne("BlueMoon.API.Models.Apartment", "Apartment")
@@ -502,6 +687,17 @@ namespace BlueMoon.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Apartment");
+                });
+
+            modelBuilder.Entity("BlueMoon.API.Models.Notification", b =>
+                {
+                    b.HasOne("BlueMoon.API.Models.User", "Recipient")
+                        .WithMany()
+                        .HasForeignKey("RecipientUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recipient");
                 });
 
             modelBuilder.Entity("BlueMoon.API.Models.Payment", b =>
@@ -570,6 +766,16 @@ namespace BlueMoon.API.Migrations
                         .HasForeignKey("HouseholdId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Household");
+                });
+
+            modelBuilder.Entity("BlueMoon.API.Models.User", b =>
+                {
+                    b.HasOne("BlueMoon.API.Models.Household", "Household")
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Household");
                 });

@@ -1,4 +1,4 @@
-﻿namespace BlueMoon.API.DTOs;
+namespace BlueMoon.API.DTOs;
 
 public class ApartmentResponseDto
 {
@@ -8,4 +8,10 @@ public class ApartmentResponseDto
     public int Floor { get; set; }
     public decimal Area { get; set; }
     public string Status { get; set; } = string.Empty;
+
+    /// <summary>Mã hộ gia đình đang hoạt động tại căn hộ (nếu có).</summary>
+    public string? HouseholdCode { get; set; }
+
+    /// <summary>Số nhân khẩu đang cư trú (không tính đã chuyển đi).</summary>
+    public int ResidentCount { get; set; }
 }

@@ -1,20 +1,27 @@
 using BlueMoon.API.Data;
 using BlueMoon.API.DTOs;
+using BlueMoon.API.Infrastructure;
 using BlueMoon.API.Models;
+using BlueMoon.API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace BlueMoon.API.Controllers;
 
+/// <summary>Danh mục khoản thu — Ban quản trị và Kế toán (US-006).</summary>
 [ApiController]
+[Authorize(Roles = Roles.Staff)]
 [Route("api/[controller]")]
 public sealed class FeeCategoriesController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly NotificationService _notifications;
 
-    public FeeCategoriesController(AppDbContext context)
+    public FeeCategoriesController(AppDbContext context, NotificationService notifications)
     {
         _context = context;
+        _notifications = notifications;
     }
 
     [HttpGet]
@@ -66,6 +73,10 @@ public sealed class FeeCategoriesController : ControllerBase
         };
 
         _context.FeeCategories.Add(category);
+        await _notifications.NotifyStaffAsync(User.GetUserId(), "FeeCategory",
+            $"Khoản thu mới: {category.Name}",
+            $"{User.Identity?.Name} đã tạo khoản thu \"{category.Name}\" — {category.UnitPrice:N0} đ/{category.Unit} ({(category.IsMandatory ? "bắt buộc" : "tự nguyện")}).",
+            "/fee-categories");
         try
         {
             await _context.SaveChangesAsync();
@@ -92,6 +103,9 @@ public sealed class FeeCategoriesController : ControllerBase
         if (await HasDuplicateName(name, id))
             return Conflict(new { message = "Fee category name already exists." });
 
+        var oldPrice = category.UnitPrice;
+        var wasActive = category.IsActive;
+
         category.Name = name;
         category.Description = Normalize(dto.Description);
         category.Unit = dto.Unit.Trim();
@@ -99,6 +113,21 @@ public sealed class FeeCategoriesController : ControllerBase
         category.CalculationMethod = dto.CalculationMethod.Trim();
         category.IsMandatory = dto.IsMandatory;
         category.IsActive = dto.IsActive;
+
+        if (oldPrice != dto.UnitPrice)
+        {
+            await _notifications.NotifyStaffAsync(User.GetUserId(), "FeeCategory",
+                $"Đổi đơn giá: {category.Name}",
+                $"{User.Identity?.Name} đã đổi đơn giá \"{category.Name}\" từ {oldPrice:N0} đ thành {dto.UnitPrice:N0} đ/{category.Unit}. Chỉ áp dụng cho khoản phải thu sinh sau thời điểm này.",
+                "/fee-categories", "warning");
+        }
+        else if (wasActive && !dto.IsActive)
+        {
+            await _notifications.NotifyStaffAsync(User.GetUserId(), "FeeCategory",
+                $"Ngừng áp dụng: {category.Name}",
+                $"{User.Identity?.Name} đã ngừng áp dụng khoản thu \"{category.Name}\".",
+                "/fee-categories", "warning");
+        }
 
         try
         {
@@ -119,7 +148,14 @@ public sealed class FeeCategoriesController : ControllerBase
         if (category is null)
             return NotFound();
 
+        if (!category.IsActive)
+            return NoContent();
+
         category.IsActive = false;
+        await _notifications.NotifyStaffAsync(User.GetUserId(), "FeeCategory",
+            $"Ngừng áp dụng: {category.Name}",
+            $"{User.Identity?.Name} đã ngừng áp dụng khoản thu \"{category.Name}\".",
+            "/fee-categories", "warning");
         await _context.SaveChangesAsync();
         return NoContent();
     }
@@ -135,6 +171,10 @@ public sealed class FeeCategoriesController : ControllerBase
             return Conflict(new { message = "Cannot delete a fee category referenced by fee charges." });
 
         _context.FeeCategories.Remove(category);
+        await _notifications.NotifyStaffAsync(User.GetUserId(), "FeeCategory",
+            $"Đã xóa khoản thu: {category.Name}",
+            $"{User.Identity?.Name} đã xóa khoản thu \"{category.Name}\".",
+            "/fee-categories", "danger");
         try
         {
             await _context.SaveChangesAsync();

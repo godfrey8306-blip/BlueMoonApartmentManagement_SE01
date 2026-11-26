@@ -15,7 +15,7 @@ public sealed class FeeCategoryCreateDto
     [StringLength(50, MinimumLength = 1)]
     public string Unit { get; set; } = string.Empty;
 
-    [Range(typeof(decimal), "0", "1000000000000")]
+    [Range(typeof(decimal), "0", "1000000000000", ParseLimitsInInvariantCulture = true)]
     public decimal UnitPrice { get; set; }
 
     [Required]
@@ -38,7 +38,7 @@ public sealed class FeeCategoryUpdateDto
     [StringLength(50, MinimumLength = 1)]
     public string Unit { get; set; } = string.Empty;
 
-    [Range(typeof(decimal), "0", "1000000000000")]
+    [Range(typeof(decimal), "0", "1000000000000", ParseLimitsInInvariantCulture = true)]
     public decimal UnitPrice { get; set; }
 
     [Required]

@@ -1,6 +1,8 @@
 using System.Text;
 using BlueMoon.API;
 using BlueMoon.API.Data;
+using BlueMoon.API.Infrastructure;
+using BlueMoon.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -30,6 +32,7 @@ var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
 
 builder.Services.AddSingleton<PasswordHasher>();
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -66,6 +69,32 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// ── Tác vụ khởi động ─────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+    // Dữ liệu cũ (trước migration ScaleSearchAndFees) chưa có cột tìm kiếm không dấu
+    var missing = await db.Residents.Where(r => r.SearchName == "").ToListAsync();
+    if (missing.Count > 0)
+    {
+        foreach (var r in missing)
+            r.SearchName = TextNormalizer.Normalize(r.FullName);
+        await db.SaveChangesAsync();
+    }
+
+    // dotnet run -- --seed [--reset] [--residents N]
+    if (args.Contains("--seed"))
+    {
+        var hasher = scope.ServiceProvider.GetRequiredService<PasswordHasher>();
+        var residentsArg = Array.IndexOf(args, "--residents");
+        var target = residentsArg >= 0 && residentsArg + 1 < args.Length && int.TryParse(args[residentsArg + 1], out var n) ? n : 260;
+        await DevDataSeeder.RunAsync(db, hasher, reset: args.Contains("--reset"), targetResidents: target);
+        if (args.Contains("--exit"))
+            return;
+    }
+}
 
 app.Run();
 
